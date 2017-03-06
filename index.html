@@ -1,0 +1,249 @@
+/* copyright * 2017 * Nadeem Elahi * nadeem.elahi@gmail.com */
+<html>
+<head>
+<style>
+#toastW {
+   position: relative;
+   visibility: hidden;
+   width: 100%;
+   height: 0px;
+   top:0px; right:0px;
+   z-index: 100;
+   visibility: hidden;
+}
+
+#toast { 
+   position: absolute;
+   top: 20px; 
+   /* right: 20px; */ /* in view */
+   right: 20px; /* out of view */
+   z-index: 10;
+   background: #99D8CA;
+   width: 220px;
+   height: 60px;
+   line-height: 60px;
+   font-size: 20px;
+   color: #000;
+   text-align: center;
+   visibility: hidden;
+   opacity: 0;
+}
+
+
+</style>
+<body>
+
+<div id="toastW">
+   <p id="toast"></p>
+</div>
+
+<script>
+
+"use strict";
+
+var T = new function(){ //singleton
+   this.id = "T -singleton";
+   var items = [], len;
+   this.add=function(item){
+      items.push(item);len=items.length;
+      //console.log("item:",items[len-1],"added to T");
+      //console.log(items);
+      //console.log("item added to T, calling tick(0)");
+      //items[len-1].tick(0); //MOVED TO C obj
+   };
+   var rmIdx;
+   this.rm=function(item){
+      rmIdx=items.indexOf(item);
+      items.splice(rmIdx,1);
+      len=items.length;
+      //console.log("T.rm'd");
+   };
+   var dt,ct,lt=Date.now();
+   var raf = window.requestAnimationFrame || window.msRequestAnimationFrame || window.oRequestAnimationFrame || window.mozRequestAnimationFrame || window.webkitRequestAnimationFrame || function(cb){setTimeout(cb,30);};
+   var i,t=0;
+   function ticker(){
+      ct=Date.now();
+      dt=ct-lt;
+      t += dt;
+      if(t>30){
+	 for(i=0;i<len;i++){
+	    items[i].tick(t);
+	 }
+	 t=0;
+      } 
+      lt=ct;
+      raf(ticker);
+   } 
+   ticker();
+};
+
+// "ease":[ 0.25, 0.1, 0.25, 1.0 ],
+
+function BZC(arr, name){
+   this.classname = "BezCurve";
+   this.instancename = name;
+   var x0,y0,cx0,cy0,   x1,y1,cx1,cy1;
+   if(arr.length == 4){ //1d array of 4 elements (Easings)
+      // console.log('time curve');
+      // x is time t
+      // y is elapsed percentage
+      x0 = 0; y0 = 0; x1 = 1; y1 = 1;
+      cx0 = arr[0];   cy0 = arr[1];
+      cx1 = arr[2];   cy1 = arr[3];
+   } else if(arr.length == 2){ //2d array of 2 element of 2elements
+      //console.log('motion curve');
+      x0 = arr[0][0];      y0 = arr[0][1]; 
+      cx0 = arr[0][2];     cy0 = arr[0][3];
+      x1 = arr[1][0];      y1 = arr[1][1]; 
+      cx1 = arr[1][2];     cy1 = arr[1][3];
+   }
+
+   //coefficients
+   //CX = 3*(cx0-x0);      //CY = 3*(cy0-y0);
+   //BX = 3*(cx1-cx0)-CX;  //BY = 3*(cy1-cy0)-CY;
+   //AX = x1-x0-CX-BX;     //AY = y1-y0-CY-BY
+   var AX,BX,CX,AY,BY,CY;
+   CX = 3*(cx0-x0);      CY = 3*(cy0-y0);
+   BX = 3*(cx1-cx0)-CX;  BY = 3*(cy1-cy0)-CY;
+   AX = x1-x0-CX-BX;     AY = y1-y0-CY-BY;
+
+   this.AX = AX; this.AY = AY;
+   this.BX = BX; this.BY = BY;
+   this.CX = CX; this.CY = CY;
+
+   this.x0 = x0; this.y0 = y0;
+
+   //xt = AX*t*t*t + BX*t*t + CX*t + x0;
+   //yt = AY*t*t*t + BY*t*t + CY*t + y0; 
+   this.xt;
+};
+BZC.prototype.get = function(t){
+   //this.xt = this.getx(t);
+   //return this.gety(this.xt);
+   return this.gety(t); //let t be x
+};
+BZC.prototype.getx = function(t){
+   return this.AX*t*t*t + this.BX*t*t + this.CX*t + this.x0;
+};
+BZC.prototype.gety = function(t){
+   return this.AY*t*t*t + this.BY*t*t + this.CY*t + this.y0;
+};
+
+var Toast = new function(){
+   var that = this;
+
+   var $toast = document.getElementById("toast"); //empty p node
+   var queue = [];
+
+   //slide in left from right: -200px; to right: 20px, fade out 
+   var ease = new BZC([0.25, 0.1, 0.25, 1.0], null);
+   var elapsed, current, currentEase, duration = 2000; 
+
+   var busy = false;
+
+   var $msg;
+   this.text = function(msg){
+      $msg = document.createTextNode(msg);
+      queue.push($msg);
+      if(busy){
+	 return;
+      } else {
+	 busy = true;
+	 elapsed = 0;
+	 $toast.appendChild($msg);
+	 $toast.style.visibility = "visible";
+	 this.tick = inFade;
+      }
+   }
+
+   function inFade(dt){
+      elapsed += dt;
+      current = elapsed/duration;
+      if(elapsed > duration){
+	 this.tick = dummy;
+	 $toast.style.opacity = 1;
+	 elapsed = 0;
+	 that.tick = pause2sBeforeFadeOut;
+      } else {
+	 currentEase = ease.get(current);
+	 $toast.style.opacity = currentEase;
+      }
+   }
+    
+   function pause2sBeforeNext(dt){
+      elapsed += dt;
+      if(elapsed > duration){
+	 elapsed = 0;
+	 that.tick = fadeOut;
+      } 
+   }
+ 
+   function fadeOut(dt){
+      elapsed += dt;
+      current = elapsed/duration;
+      if(elapsed>duration){
+
+	 this.tick = dummy;
+
+	 elapsed = 0;
+	 $toast.style.opacity = 0;
+
+	 emptyNode($toast);
+
+	 queue.shift();
+	 //check for next
+	 //if next, then fade, in,
+	 //else set right to -220px
+	 if(queue.length > 0){
+	    $toast.appendChild(queue[0]);
+	    this.tick = fadeInNext;
+	 } else {
+	    this.busy = false;
+	 }
+	 
+      } else {
+	 currentEase = ease.get(current);
+	 $toast.style.opacity = (1-currentEase);
+      }
+   }
+
+
+   function fadeInNext(dt){
+      elapsed += dt;
+      current = elapsed/duration;
+      if(elapsed > duration){
+	 elapsed = 0;
+	 $toast.style.opacity = 1;
+	 elapsed = 0;
+	 this.tick = pause2sBeforeNext;
+      } else {
+	 currentEase = ease.get(current);
+	 $toast.style.opacity = currentEase;
+      }
+   }
+   
+   function pause2sBeforeFadeOut(dt){
+      elapsed += dt;
+      if(elapsed > duration){
+	 elapsed = 0;
+	 that.tick = fadeOut;
+      } 
+   }
+
+   function dummy(){}
+   this.tick = dummy;
+   T.add(this);
+
+};
+setTimeout(function(){
+   Toast.text("saving to database");
+   Toast.text("save FAILED");
+
+}, 2000);
+
+
+
+</script>
+
+</body>
+</html>
